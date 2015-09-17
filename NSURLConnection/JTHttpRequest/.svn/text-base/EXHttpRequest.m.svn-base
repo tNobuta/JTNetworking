@@ -1,0 +1,238 @@
+//
+//  EXURLConnection.m
+//  qdqddadadadad
+//
+//  Created by Jason Tang on 9/27/12.
+//  Copyright (c) 2012 __MyCompanyName__. All rights reserved.
+//
+
+#import "EXHttpRequest.h"
+
+@interface  NSMutableURLRequest (FormData)
+- (void)setFormDataWithTextField:(NSDictionary *)textField withFileField:(NSDictionary *)fileField;
+@end
+
+@implementation NSMutableURLRequest (FormData)
+- (void)setFormDataWithTextField:(NSDictionary *)textField withFileField:(NSDictionary *)fileField
+{
+    NSString *boundary=@"75kdeale0a93jakaie22";
+    NSMutableData *postData=[[NSMutableData alloc] init];
+    [self setHTTPMethod:@"POST"];
+    [self setValue:[NSString stringWithFormat:@"multipart/form-data;boundary=%@",boundary] forHTTPHeaderField:@"Content-Type"];
+    
+    if(textField)
+    {
+        for(NSString *name in textField.allKeys)
+        {
+            NSString *value=[textField objectForKey:name];
+            [postData appendData:[[NSString stringWithFormat:@"--%@\r\nContent-Disposition: form-data; name=\"%@\"\r\n\r\n%@\r\n",boundary,name,value] dataUsingEncoding:NSUTF8StringEncoding]];
+        }
+    }
+    
+    if(fileField)
+    {
+        for(NSString *name in fileField.allKeys)
+        {
+            NSData *value=[fileField objectForKey:name];
+            [postData appendData:[[NSString stringWithFormat:@"--%@\r\nContent-Disposition: form-data; name=\"%@\"; filename=\"%@.jpg\"\r\nContent-Type: application/octet-stream\r\n\r\n",boundary,name,name] dataUsingEncoding:NSUTF8StringEncoding]];
+            [postData appendData:value];
+            [postData appendData:[[NSString stringWithFormat:@"\r\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+            
+        }
+    }
+    
+    [postData appendData:[[NSString stringWithFormat:@"--%@--\r\n",boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+    [self setValue:[NSString stringWithFormat:@"%d",postData.length] forHTTPHeaderField:@"Content-Length"];
+    [self setHTTPBody:postData];
+    [postData release];
+}
+@end
+
+
+@implementation EXHttpRequest
+@synthesize delegate=_delegate,tag,object,url=_url,data=_data,finishSelector=_finishSelector,failSelector=_failSelector,responseString=_responseString,error=_error,statusCode;
+
++ (EXHttpRequest *)requestWithURL:(NSString *)url
+{
+    return [[[EXHttpRequest alloc] initWithURL:url] autorelease];
+}
+
++ (EXHttpRequest *)requestWithURL:(NSString *)url delegate:(id<EXHttpRequestDelegate>)delegate finishSelector:(SEL)finishSel failSelector:(SEL)failSel
+{
+    return [[[EXHttpRequest alloc] initWithURL:url delegate:delegate finishSelector:finishSel failSelector:failSel] autorelease];
+}
+
++ (EXHttpRequest *)requestWithURL:(NSString *)url delegate:(id<EXHttpRequestDelegate>)delegate
+{
+    return [[[EXHttpRequest alloc] initWithURL:url delegate:delegate] autorelease];
+}
+
+
+- (id)initWithURL:(NSString *)url
+{
+    if(self = [super init])
+    {
+       _request=[[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:url]]; 
+        _url = [url retain];
+    }
+
+    return self;
+}
+
+- (id)initWithURL:(NSString *)url delegate:(id<EXHttpRequestDelegate>)delegate finishSelector:(SEL)finishSel failSelector:(SEL)failSel
+{
+    if(self = [self initWithURL:url])
+    {
+        self.delegate=delegate;
+        self.finishSelector=finishSel;
+        self.failSelector=failSel;
+    }
+    
+    return self;
+}
+
+
+- (id)initWithURL:(NSString *)url delegate:(id<EXHttpRequestDelegate>)delegate
+{
+    if(self = [self initWithURL:url])
+    {
+        self.delegate=delegate;
+    }
+    
+    return self;
+}
+
+- (void)dealloc
+{
+    if(_con)
+    {
+        [_con cancel];
+        [_con release]; 
+    }
+    
+    [_request release];
+    
+    [_url release];
+    [_data release];
+    [_responseString release];
+    [_error release];
+    self.object = nil;
+    [super dealloc];
+}
+
+- (void)setMethod:(NSString *)method
+{
+   if(_request)
+   {
+       [_request setHTTPMethod:method];
+   }
+}
+
+- (void)setPostBody:(NSString *)bodyString
+{
+    if(_request)
+    {
+        NSData *postData=[bodyString dataUsingEncoding:NSUTF8StringEncoding];
+        [_request setHTTPBody:postData];
+    }
+}
+
+- (void)setHeader:(NSString *)key value:(NSString *)value
+{
+    if(_request)
+    {
+        [_request setValue:value forHTTPHeaderField:key];
+    }
+}
+
+- (void)setCachePolicy:(NSURLRequestCachePolicy)policy
+{
+    if(_request)
+    {
+        [_request setCachePolicy:policy];
+    }
+}
+
+- (void)setFormDataWithTextField:(NSDictionary *)textField withFileField:(NSDictionary *)fileField
+{
+    if(_request)
+    {
+        [_request setFormDataWithTextField:textField withFileField:fileField];
+    }
+}
+
+
+- (void)start
+{
+    if(_data)
+    {
+        [_data release];
+    }
+    
+    _data=[[NSMutableData alloc] init];
+    _con=[[NSURLConnection alloc] initWithRequest:_request delegate:self];
+    [self retain];
+}
+
+- (void)cancel
+{
+    [_con cancel];
+    [_data release];
+    _data = nil;
+    [self release];
+}
+
+- (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
+{
+    [_data appendData:data];
+}
+
+- (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
+{
+    self.statusCode = ((NSHTTPURLResponse *)response).statusCode;
+}
+
+- (void)connectionDidFinishLoading:(NSURLConnection *)connection
+{
+    self.responseString=[[NSString alloc] initWithData:_data encoding:NSUTF8StringEncoding];
+    
+    if(self.delegate)
+    {
+        if(self.finishSelector)
+        {
+            [self.delegate performSelector:self.finishSelector withObject:self];
+        }
+        else if([self.delegate respondsToSelector:@selector(requestDidFinish:)])
+        {
+            [self.delegate requestDidFinish:self];
+        }
+    }
+    
+    [_con release];
+    _con = nil;
+    [self release];
+}
+
+
+- (void)connection:(NSURLConnection *)connection didFailWithError:(NSError *)error
+{
+    self.error=error;
+    
+    if(self.delegate)
+    {
+        if(self.failSelector)
+        {
+            [self.delegate performSelector:self.failSelector withObject:self];
+        }
+        else if([self.delegate respondsToSelector:@selector(requestDidFail:)])
+        {
+            [self.delegate requestDidFail:self];
+        }
+    }
+    
+    [_con release];
+    _con = nil;
+    [self release];
+}
+
+@end

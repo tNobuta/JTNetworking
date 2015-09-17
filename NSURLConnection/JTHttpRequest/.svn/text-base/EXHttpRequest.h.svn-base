@@ -1,0 +1,57 @@
+//
+//  EXURLConnection.h
+//  qdqddadadadad
+//
+//  Created by Jason Tang on 9/27/12.
+//  Copyright (c) 2012 __MyCompanyName__. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+
+@protocol EXHttpRequestDelegate; 
+
+@interface EXHttpRequest : NSObject<NSURLConnectionDataDelegate,NSURLConnectionDelegate>
+{
+    id<EXHttpRequestDelegate>   _delegate;
+    NSString                    *_url;
+    NSMutableURLRequest         *_request;
+    NSURLConnection             *_con;
+    NSMutableData               *_data;
+    SEL                         _finishSelector;
+    SEL                         _failSelector;
+    
+}
+
+@property (nonatomic,assign) id<EXHttpRequestDelegate> delegate;
+@property (nonatomic,readonly) NSString *url;
+@property (nonatomic) int tag;
+@property (nonatomic,retain) id object;
+@property (nonatomic,readonly) NSData *data;
+@property (nonatomic,retain) NSString *responseString;
+@property (nonatomic,retain) NSError  *error;
+@property (nonatomic) int statusCode;
+@property (nonatomic) SEL finishSelector;
+@property (nonatomic) SEL failSelector;
+
++ (EXHttpRequest *)requestWithURL:(NSString *)url;
++ (EXHttpRequest *)requestWithURL:(NSString *)url delegate:(id<EXHttpRequestDelegate>)delegate finishSelector:(SEL)finishSel failSelector:(SEL)failSel;
++ (EXHttpRequest *)requestWithURL:(NSString *)url delegate:(id<EXHttpRequestDelegate>)delegate;
+- (id)initWithURL:(NSString *)url;
+- (id)initWithURL:(NSString *)url delegate:(id<EXHttpRequestDelegate>)delegate finishSelector:(SEL)finishSel failSelector:(SEL)failSel;
+- (id)initWithURL:(NSString *)url delegate:(id<EXHttpRequestDelegate>)delegate;
+- (void)setMethod:(NSString *)method;
+- (void)setPostBody:(NSString *)bodyString;
+- (void)setHeader:(NSString *)key value:(NSString *)value;
+- (void)setCachePolicy:(NSURLRequestCachePolicy)policy;
+- (void)setFormDataWithTextField:(NSDictionary *)textField withFileField:(NSDictionary *)fileField;
+- (void)start;
+- (void)cancel;
+
+@end
+
+@protocol EXHttpRequestDelegate <NSObject>
+@optional
+- (void)requestDidFinish:(EXHttpRequest *)request;
+- (void)requestDidFail:(EXHttpRequest *)request;
+
+@end
